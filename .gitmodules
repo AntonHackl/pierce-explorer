@@ -1,0 +1,4 @@
+[submodule "Pierce"]
+	path = Pierce
+	url = https://github.com/AntonHackl/Pierce.git
+	branch = demo
