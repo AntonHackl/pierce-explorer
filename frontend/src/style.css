@@ -38,3 +38,14 @@ footer { display: flex; justify-content: space-between; gap: 32px; margin: 34px 
 footer span:last-child { max-width: 480px; }
 @media (max-width: 650px) { main { padding: 0 20px; } .local { font-size: 9px; letter-spacing: .5px; } .workload { padding: 24px; } .workload-heading { align-items: start; flex-wrap: wrap; } .actions, footer { align-items: start; flex-direction: column; } .metric-grid { grid-template-columns: 1fr; } }
 @media (prefers-reduced-motion: reduce) { .status.active::before { animation: none; } }
+
+.actions { flex-wrap: wrap; gap: 12px; }
+.workload-selector { display: flex; gap: 12px; margin-top: 28px; }
+.workload-selector button { flex: 1; text-align: left; border: 1px solid #c5cec0; background: #fbfcf7; }
+.workload-selector button[aria-pressed="true"] { background: #d9ee9b; border-color: #607e3d; }
+.workload-selector small { display: block; margin-top: 8px; font-size: 12px; font-weight: 400; }
+.workload-selector + .workload { margin-top: 16px; }
+.memory-panel { margin-top: 24px; border: 1px solid #d4dacf; padding: 22px; border-radius: 12px; background: #fbfcf7; }
+.memory-panel p, .memory-facts { font-size: 13px; line-height: 1.7; color: #52685b; }
+.memory-facts { display: flex; gap: 24px; flex-wrap: wrap; }
+@media (max-width: 500px) { .workload-selector { flex-direction: column; } }

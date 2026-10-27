@@ -1,34 +1,54 @@
+from contextlib import asynccontextmanager
+from typing import Literal
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-
+from pydantic import BaseModel, ConfigDict
 from .runner import DemoError, PierceRunner
 
-
-class Metrics(BaseModel):
-    overallTimeMs: float
-    queryTimeMs: float
-    resultCount: int
-
-
-class Health(BaseModel):
-    ready: bool
-    running: bool
-    issues: list[str]
-
-
-app = FastAPI(title="Pierce local demo")
 runner = PierceRunner()
 
 
-@app.get("/api/health", response_model=Health)
+@asynccontextmanager
+async def lifespan(app):
+    yield
+    runner.close()
+
+
+class WorkloadRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    workloadId: Literal['small', 'large']
+
+
+app = FastAPI(title='Pierce local demo', lifespan=lifespan)
+
+
+def invoke(action):
+    try:
+        return action()
+    except DemoError as error:
+        detail = {'message': str(error), 'code': error.code, **(error.details or {})} if error.code else str(error)
+        raise HTTPException(status_code=error.status_code, detail=detail) from error
+
+
+@app.get('/api/health')
 def health():
     return runner.health()
 
 
-@app.post("/api/run", response_model=Metrics)
-def run():
-    # FastAPI executes regular def endpoints in its worker thread pool.
-    try:
-        return runner.run()
-    except DemoError as error:
-        raise HTTPException(status_code=error.status_code, detail=str(error)) from error
+@app.get('/api/workloads')
+def workloads():
+    return runner.workloads()
+
+
+@app.post('/api/load')
+def load(body: WorkloadRequest):
+    return invoke(lambda: runner.load(body.workloadId))
+
+
+@app.post('/api/run')
+def run(body: WorkloadRequest):
+    return invoke(lambda: runner.run(body.workloadId))
+
+
+@app.post('/api/unload')
+def unload(body: WorkloadRequest):
+    return invoke(lambda: runner.unload(body.workloadId))
