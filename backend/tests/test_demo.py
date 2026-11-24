@@ -157,6 +157,9 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(self.runner.workload('large')['completedQueries'], 3)
             self.assertEqual(self.runner.workload('small')['lastResult']['resultCount'], 5000)
             self.assertEqual(self.runner.workload('large')['lastResult']['resultCount'], 1000000)
+            self.assertEqual(self.runner.workload('small')['lastResult']['phaseTimingsMs'], {
+                'estimation': 0.5, 'trace': 1.2, 'compaction': 0.25, 'download': 0.05,
+            })
             self.assertEqual({key: pair['pairHandle'] for key, pair in self.runner.resident.items()}, handles)
             self.runner.unload('large'); self.runner.unload('large')
             self.assertTrue(self.runner.workload('small')['loaded'])
@@ -172,7 +175,7 @@ class RunnerTests(unittest.TestCase):
         session, = self.runner.runs_dir.iterdir()
         requests = [json.loads(line) for line in (session / 'requests.jsonl').read_text().splitlines()]
         self.assertEqual(sum(r['request']['command'] == 'load' for r in requests), 3)
-        self.assertTrue(all(r['request']['version'] == 2 and r['backendOperationMs'] >= 0 for r in requests))
+        self.assertTrue(all(r['request']['version'] == 3 and r['backendOperationMs'] >= 0 for r in requests))
         self.assertTrue((session / 'operations.jsonl').is_file())
 
     def test_diagnostics_pipe_is_drained(self):
@@ -189,9 +192,17 @@ class RunnerTests(unittest.TestCase):
             self.runner.load('small')
             self.assertEqual(self.runner.run('small')['resultCount'], 0)
 
+    def test_older_worker_is_rejected(self):
+        self.prepare()
+        with self.worker('old_worker'):
+            with self.assertRaises(DemoError):
+                self.runner.load('small')
+            self.assertFalse(self.runner.workload('small')['loaded'])
+
     def test_failure_invalidates_all_pairs_restart_and_lock_release(self):
         self.prepare(); self.prepare_large_stub()
-        for mode, status in (('timeout', 504), ('crash', 500), ('malformed', 500), ('wrong_id', 500), ('negative', 500)):
+        for mode, status in (('timeout', 504), ('crash', 500), ('malformed', 500), ('wrong_id', 500),
+                             ('negative', 500), ('negative_phase', 500)):
             with self.subTest(mode=mode):
                 self.runner.close()
                 self.runner.timeout = 0.2 if mode == 'timeout' else 2

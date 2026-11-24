@@ -1,4 +1,4 @@
-"""GPU-free persistent protocol-v2 worker fixture."""
+"""GPU-free persistent worker fixture."""
 import json
 import sys
 import time
@@ -43,7 +43,12 @@ for line in sys.stdin:
             pair['completedQueries'] += 1
             pair['lastResult'] = {'resultCount': 0 if mode == 'zero' else 5000 if pair['key'] == 'small' else 1000000,
                                   'queryExecutionUs': -1 if mode == 'negative' else 2500,
-                                  'benchmarkPhaseSumUs': 1500, 'rawHitCount': 70000, 'resultBufferBytes': 560000}
+                                  'benchmarkPhaseSumUs': 2000, 'rawHitCount': 70000,
+                                  'resultBufferBytes': 80008, 'hashTableBytes': 80008, 'estimatedPairCount': 5000,
+                                  'phaseTimingsUs': {
+                                      'estimation': -1 if mode == 'negative_phase' else 500,
+                                      'trace': 1200, 'compaction': 250, 'download': 50,
+                                  }}
     elif command == 'unload':
         if mode != 'bad_unload': del pairs[request['pairHandle']]
     elif command == 'shutdown':
@@ -53,7 +58,7 @@ for line in sys.stdin:
     if mode == 'diagnostics':
         sys.stderr.write('diagnostic message\n' * 20000)
         sys.stderr.flush()
-    response = {'version': 2, 'id': request['id'], 'ok': error is None, 'data': status()}
+    response = {'version': 2 if mode == 'old_worker' else 3, 'id': request['id'], 'ok': error is None, 'data': status()}
     if error: response.update(error=error, code=code, details=details)
     print(json.dumps(response), flush=True)
     if command == 'shutdown': break

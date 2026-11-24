@@ -77,6 +77,12 @@ def main():
             key = 'large' if multi and i % 2 else 'small'
             result = post('run', key)
             assert result['resultCount'] == (large_count if key == 'large' else 5000)
+            phases = result['phaseTimingsMs']
+            assert set(phases) == {'estimation', 'trace', 'compaction', 'download'}
+            assert result['estimatedPairCount'] > 0 and result['hashTableBytes'] > 0
+            assert result['rawHitCount'] == (12191778 if key == 'large' else 70000)
+            assert 0 < sum(phases.values()) <= result['queryExecutionMs'] + 0.001
+            assert abs(sum(phases.values()) - result['benchmarkPhaseSumMs']) < 0.001
             assert runner.resident[key]['pairHandle'] == handles[key]
             assert runner.process is process
             if i in (1, 3, 99): snapshots.append(client.get('/api/health').json())
@@ -112,7 +118,7 @@ def main():
                   'statusAfter100Queries': status, 'memorySnapshots': snapshots}
         (directory / 'workload-report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     assert process.returncode == 0
-    completed = subprocess.run([str(runner.executable)], input='not json\n{"version":2,"id":"end","command":"shutdown"}\n',
+    completed = subprocess.run([str(runner.executable)], input='not json\n{"version":3,"id":"end","command":"shutdown"}\n',
                                capture_output=True, text=True, check=True, timeout=10)
     malformed, shutdown = map(json.loads, completed.stdout.splitlines())
     assert malformed['ok'] is False and shutdown['ok'] is True

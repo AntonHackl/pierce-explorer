@@ -48,4 +48,15 @@ footer span:last-child { max-width: 480px; }
 .memory-panel { margin-top: 24px; border: 1px solid #d4dacf; padding: 22px; border-radius: 12px; background: #fbfcf7; }
 .memory-panel p, .memory-facts { font-size: 13px; line-height: 1.7; color: #52685b; }
 .memory-facts { display: flex; gap: 24px; flex-wrap: wrap; }
+.phase-panel { margin-top: 16px; }
+.phase-panel dl { display: grid; gap: 12px; margin: 18px 0 12px; }
+.phase-row { display: grid; grid-template-columns: minmax(110px, 145px) minmax(0, 1fr) 66px; align-items: center; gap: 12px; font-size: 13px; }
+.phase-row dd { margin: 0; }
+.phase-track { background: #e6ebe2; border-radius: 6px; height: 6px; overflow: hidden; }
+.phase-track span { display: block; height: 100%; border-radius: inherit; background: #577b52; }
+.phase-time { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 500px) { .workload-selector { flex-direction: column; } }
+
+.experiment-figure { margin: 1.5rem 0; padding: 1rem; background: white; border-radius: 0.5rem; }
+.experiment-figure svg { display: block; width: 100%; height: auto; margin-bottom: 0.75rem; }
+.experiment-data { max-height: 25rem; overflow: auto; }

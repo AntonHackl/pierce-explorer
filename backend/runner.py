@@ -190,7 +190,7 @@ class PierceRunner:
 
     def _exchange(self, command, **arguments):
         request_id = uuid.uuid4().hex
-        request = {"version": 2, "id": request_id, "command": command, **arguments}
+        request = {"version": 3, "id": request_id, "command": command, **arguments}
         start = time.perf_counter()
         response = None
         try:
@@ -206,7 +206,7 @@ class PierceRunner:
                 raise line
             response = json.loads(line)
             if (not isinstance(response, dict) or type(response.get("version")) is not int or
-                    response["version"] != 2 or response.get("id") != request_id or
+                    response["version"] != 3 or response.get("id") != request_id or
                     type(response.get("ok")) is not bool):
                 raise ValueError("Invalid worker response or request ID")
             if not response["ok"]:
@@ -281,11 +281,19 @@ class PierceRunner:
                 if not isinstance(result, dict):
                     raise ValueError("Invalid query metrics")
                 result_count = self._number(result, "resultCount", integer=True)
+                phases = result.get("phaseTimingsUs")
+                if not isinstance(phases, dict):
+                    raise ValueError("Invalid query phase timings")
+                phase_timings = {name: self._number(phases, name, integer=True) / 1000
+                                 for name in ("estimation", "trace", "compaction", "download")}
                 result = {"workloadId": key, "queryExecutionMs": self._number(result, "queryExecutionUs") / 1000,
                           "benchmarkPhaseSumMs": self._number(result, "benchmarkPhaseSumUs") / 1000,
+                          "phaseTimingsMs": phase_timings,
                           "resultCount": result_count, "completedQueries": count,
                           "actualSelectivity": result_count / (CATALOG[key]["countA"] * CATALOG[key]["countB"]),
                           "rawHitCount": self._number(result, "rawHitCount", integer=True),
+                          "estimatedPairCount": self._number(result, "estimatedPairCount", integer=True),
+                          "hashTableBytes": self._number(result, "hashTableBytes", integer=True),
                           "resultBufferBytes": self._number(result, "resultBufferBytes", integer=True)}
             if bool(count) != (result is not None):
                 raise ValueError("Query count and metrics disagree")

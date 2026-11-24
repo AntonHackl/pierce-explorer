@@ -52,3 +52,22 @@ def run(body: WorkloadRequest):
 @app.post('/api/unload')
 def unload(body: WorkloadRequest):
     return invoke(lambda: runner.unload(body.workloadId))
+
+class ExperimentRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    preset: Literal['live', 'large'] = 'live'
+
+
+@app.post('/api/experiments/shared-bvh')
+def shared_bvh(body: ExperimentRequest):
+    from .experiments import run_experiment
+
+    def perform():
+        if not runner.lock.acquire(blocking=False):
+            raise DemoError("Pierce is busy. Wait for the current operation to finish.", 409)
+        try:
+            return run_experiment(body.preset)
+        finally:
+            runner.lock.release()
+
+    return invoke(perform)

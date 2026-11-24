@@ -1,11 +1,18 @@
 import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
+import { Experiments } from './Experiments'
 
 type WorkloadId = 'small' | 'large'
 type Operation = 'load' | 'run' | 'unload'
 type LoadInfo = { datasetLoadMs: number; runtimeInitializationMs: number }
-type Metrics = { workloadId: WorkloadId; queryExecutionMs: number; resultCount: number; completedQueries: number; actualSelectivity: number; rawHitCount: number; resultBufferBytes: number }
+type QueryPhase = 'estimation' | 'trace' | 'compaction' | 'download'
+type Metrics = {
+  workloadId: WorkloadId; queryExecutionMs: number; resultCount: number; completedQueries: number
+  actualSelectivity: number; rawHitCount: number; estimatedPairCount: number
+  hashTableBytes: number; resultBufferBytes: number
+  phaseTimingsMs: Record<QueryPhase, number>
+}
 type Workload = {
   workloadId: WorkloadId; name: string; countA: number; countB: number
   selectivityKind: 'exact' | 'target'; selectivity: number; expectedResultCount: number | null
@@ -26,6 +33,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 const mib = (bytes: number) => `${(bytes / 2 ** 20).toFixed(1)} MiB`
 const gib = (bytes: number) => `${(bytes / 2 ** 30).toFixed(2)} GiB`
+const queryPhases: { key: QueryPhase; label: string }[] = [
+  { key: 'estimation', label: 'Selectivity estimation' },
+  { key: 'trace', label: 'Trace and insert' },
+  { key: 'compaction', label: 'Hash compaction' },
+  { key: 'download', label: 'Download' },
+]
 
 function App() {
   const [selected, setSelected] = useState<WorkloadId>('small')
@@ -84,12 +97,12 @@ function App() {
   const memory = health?.memory
   return (
     <main>
-      <header><a className="brand" href="/">pierce<span> / explorer</span></a><span className="local">LOCAL DEMO · WINDOWS</span></header>
+      <header><a className="brand" href="/">pierce<span> / explorer</span></a><a href="/experiments/shared-bvh">Shared BVH experiment</a></header>
       <nav className="workload-selector" aria-label="Cube workload">
         {(['small', 'large'] as WorkloadId[]).map(id => {
           const item = workloads.find(w => w.workloadId === id)
           return <button key={id} aria-pressed={selected === id} onClick={() => setSelected(id)}>
-            {id === 'small' ? 'Small · 1k × 1k' : 'Large · 200k × 200k'}<small>{item?.loaded ? 'Loaded on GPU' : item?.prepared ? 'Unloaded' : 'Not prepared'}</small>
+            {id === 'small' ? 'Small · 1k x 1k' : 'Large · 200k x 200k'}<small>{item?.loaded ? 'Loaded on GPU' : item?.prepared ? 'Unloaded' : 'Not prepared'}</small>
           </button>
         })}
       </nav>
@@ -114,20 +127,36 @@ function App() {
       <section className="results" aria-label="Query results" aria-live="polite">
         <div className="metric-grid">
           <article><h3>Dataset load time</h3><p className="value">{loadInfo ? loadInfo.datasetLoadMs.toFixed(3) : '—'}<span>ms</span></p><p>Reading, uploading, and building both indexes. Shared runtime initialization: {loadInfo ? `${loadInfo.runtimeInitializationMs.toFixed(3)} ms` : '—'} (once per worker).</p></article>
-          <article><h3>Query execution time</h3><p className="value">{metrics ? metrics.queryExecutionMs.toFixed(3) : '—'}<span>ms</span></p><p>Complete native query, including buffers, scans, ray tracing, deduplication, and result download.</p></article>
-          <article><h3>Result count</h3><p className="value">{metrics ? metrics.resultCount.toLocaleString() : '—'}<span>pairs</span></p><p>Last successful query for this workload. Results and counters remain available when switching.</p></article>
+          <article><h3>Query execution time</h3><p className="value">{metrics ? metrics.queryExecutionMs.toFixed(3) : '—'}<span>ms</span></p><p>Complete native query, including selectivity estimation and hash-based deduplication.</p></article>
+          <article><h3>Unique pairs</h3><p className="value">{metrics ? metrics.resultCount.toLocaleString() : '—'}<span>pairs</span></p><p><strong>{metrics?.estimatedPairCount.toLocaleString() ?? '—'}</strong> estimated pairs · <strong>{metrics?.rawHitCount.toLocaleString() ?? '—'}</strong> raw hits</p></article>
         </div>
+        <article className="phase-panel" aria-labelledby="query-phases-title">
+          <h3 id="query-phases-title">Query phase breakdown</h3>
+          <dl>
+            {queryPhases.map(({ key, label }) => {
+              const duration = metrics?.phaseTimingsMs?.[key]
+              const share = duration !== undefined && metrics && metrics.queryExecutionMs > 0
+                ? Math.min(100, 100 * duration / metrics.queryExecutionMs) : 0
+              return <div className="phase-row" key={key}>
+                <dt>{label}</dt>
+                <dd className="phase-track" aria-hidden="true"><span style={{ width: share + '%' }} /></dd>
+                <dd className="phase-time">{duration !== undefined ? duration.toFixed(3) + ' ms' : '—'}</dd>
+              </div>
+            })}
+          </dl>
+          <p>Bars show each phase’s share of total query time. Deduplication happens during insertion, then compaction collects the unique pairs.</p>
+        </article>
       </section>
       <section className="memory-panel" aria-label="GPU memory">
         <h3>GPU memory · latest operation snapshot</h3>
         <p>{memory ? `${memory.device} · ${gib(memory.freeBytes)} free / ${gib(memory.totalBytes)} total · ${mib(memory.reservedBytes)} reserved as headroom` : 'Load a workload to observe GPU memory.'}</p>
         <div className="memory-facts">{workloads.map(item => <span key={item.workloadId}>{item.workloadId === 'small' ? 'Small' : 'Large'} resident buffers: <strong>{mib(item.datasetGpuBytes)}</strong></span>)}</div>
-        {metrics && <p>Last raw hits: {metrics.rawHitCount.toLocaleString()} · Result buffer: {mib(metrics.resultBufferBytes)} · Estimated sorting workspace: {mib(metrics.resultBufferBytes * 2)}</p>}
-        <p>Owned buffer sizes exclude driver and internal runtime allocations. Snapshots are observations, not peak usage; sorting workspace is an estimate.</p>
+        {metrics && <p>Hash table: {mib(metrics.hashTableBytes)} · Result buffer: {mib(metrics.resultBufferBytes)}</p>}
+        <p>Owned buffer sizes exclude driver and internal runtime allocations. Free memory is measured after each operation.</p>
       </section>
       <footer><span>Executed locally. Measured by Pierce.</span><span>GPU data stays loaded until explicitly unloaded. Native timings exclude preprocessing, process startup, and web communication. No hidden warmups.</span></footer>
     </main>
   )
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode><App /></StrictMode>)
+createRoot(document.getElementById('root')!).render(<StrictMode>{window.location.pathname === "/experiments/shared-bvh" ? <Experiments /> : <App />}</StrictMode>)
