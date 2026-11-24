@@ -175,3 +175,64 @@ This page uses local benchmark assets. It expects the base cube pair in
 `.demo/profiling-pilot/one-sided-mesh/b-{1,2,3}.pre`, and the selected tiled pair
 in `.demo/nuclei-vessel-profile/tiles-{64,192}/{n,v}.pre`. Build the query targets
 `pierce_overlap` and `pierce_bvh_compare` before running it.
+
+## Memory experiment
+
+Open `/experiments/memory` and select a workload. The page starts with recorded
+results. **Run experiment** executes five fresh joins per engine under WSL,
+checks the full pair sets, and updates the component sizes and memory peaks.
+
+The backend must run under a Windows account that can access the Ubuntu
+distribution and NVIDIA tools. Set `PIERCE_WSL_ROOT` to the Linux path of the
+working Pierce checkout if it moves. The checkout must contain the compiled
+query binary and its OptiX runtime. Set `PIERCE_WSL_DISTRO` if the distribution
+name differs from Ubuntu-24.04. Local input meshes are required under
+`.demo/nuclei-vessel-profile`. Live measurements and logs are written under
+`.demo/nuclei-vessel-profile/memory/live-runs`.
+
+The memory runner passes `--profile-memory` to the WSL `pierce_overlap` binary.
+Rebuild that binary with support for the flag before running the page. The
+flag records explicit allocation sizes and device-free-memory deltas around
+OptiX initialization. Those deltas include driver effects and overlap the
+launcher allocation, so the component table should not be summed.
+
+## Sixty5 IFC pilot
+
+The [Sixty5 discipline files](https://huggingface.co/datasets/sylvainHellin/ifc-bench/tree/main/projects/sixty5)
+are attributed to Stam + De Koning under CC BY 4.0. Save the structural and
+ventilation files locally as `str.ifc` and `ventilation.ifc`. From the project
+root, in the environment used for the native Pierce binaries, run:
+
+```powershell
+python -m pip install -r backend/requirements-ifc.txt
+python -m backend.prepare_ifc --structure str.ifc --ventilation ventilation.ifc --list-storeys
+python -m backend.prepare_ifc --structure str.ifc --ventilation ventilation.ifc --structure-storey 02GkOQJZz4x9WAhoZkM67Z --ventilation-storey 0924Col190dhvidxahEzDz
+```
+
+The example selects the first floor at 4.50 m. Build
+`pierce_preprocess`, `pierce_overlap`, and `pierce_bvh_compare` with their PTX
+assets available. The command writes the audit, native output and logs,
+source fingerprints, and viewer data under ignored `.demo/ifc/runs/`.
+Successful experiments update `.demo/ifc/current.json`. A failed experiment
+leaves the current bundle available.
+
+Start the usual backend and frontend, then open
+[the IFC pilot](http://127.0.0.1:5173/experiments/ifc). The page displays a
+recorded GPU run. Choose a surface crossing or rejected bounding-box candidate
+to highlight its two elements. The geometry audit lists exclusions for both
+disciplines. This predicate reports mesh surface crossings for review.
+
+### Live Sixty5 joins
+
+Download the electrical IFC file from the same Sixty5 collection and prepare it
+against the current floor bundle:
+
+```powershell
+python -m backend.prepare_ifc_electrical electrical.ifc
+```
+
+In the IFC pilot, run structure × ventilation, repeat it, then run structure ×
+electrical. The page reports reads, uploads, BVH builds, and additional resident
+GPU bytes from the persistent worker. Unload Sixty5 to repeat from empty Sixty5
+residency. The worker may still hold its OptiX context and other workloads.
+Each live join switches the scene to the queried discipline and lists its returned surface crossings. Select a result to inspect the contact points. If updating an existing installation, rebuild pierce_worker and prepare the electrical viewer geometry again.

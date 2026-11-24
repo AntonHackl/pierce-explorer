@@ -60,3 +60,14 @@ footer span:last-child { max-width: 480px; }
 .experiment-figure { margin: 1.5rem 0; padding: 1rem; background: white; border-radius: 0.5rem; }
 .experiment-figure svg { display: block; width: 100%; height: auto; margin-bottom: 0.75rem; }
 .experiment-data { max-height: 25rem; overflow: auto; }
+
+.experiment-links { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.experiment-links a { color: inherit; }
+.memory-components { margin-top: 24px; }
+.memory-table-scroll { overflow-x: auto; }
+.memory-table-scroll table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 14px; }
+.memory-table-scroll th, .memory-table-scroll td { text-align: left; padding: 12px 14px; border-bottom: 1px solid #d4dacf; }
+.memory-table-scroll thead { background: #e8eee2; }
+.memory-table-scroll tbody th { font-weight: 600; }
+.memory-table-scroll tbody tr:last-child > * { border-bottom: 0; }
+.memory-number { white-space: nowrap; font-variant-numeric: tabular-nums; }

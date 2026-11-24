@@ -3,6 +3,7 @@ from typing import Literal
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, ConfigDict
 from .runner import DemoError, PierceRunner
+from .ifc_api import router as ifc_router
 
 runner = PierceRunner()
 
@@ -19,6 +20,8 @@ class WorkloadRequest(BaseModel):
 
 
 app = FastAPI(title='Pierce local demo', lifespan=lifespan)
+app.include_router(ifc_router)
+app.state.pierce_runner = runner
 
 
 def invoke(action):
@@ -67,6 +70,26 @@ def shared_bvh(body: ExperimentRequest):
             raise DemoError("Pierce is busy. Wait for the current operation to finish.", 409)
         try:
             return run_experiment(body.preset)
+        finally:
+            runner.lock.release()
+
+    return invoke(perform)
+
+
+class MemoryExperimentRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    workload: Literal['vessels', 'cubes'] = 'vessels'
+
+
+@app.post('/api/experiments/memory')
+def memory_experiment(body: MemoryExperimentRequest):
+    from .memory_experiment import run_memory
+
+    def perform():
+        if not runner.lock.acquire(blocking=False):
+            raise DemoError("Pierce is busy. Wait for the current operation to finish.", 409)
+        try:
+            return run_memory(body.workload)
         finally:
             runner.lock.release()
 

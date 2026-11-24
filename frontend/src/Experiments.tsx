@@ -84,7 +84,7 @@ export function Experiments() {
     return [...values, { label: 'Other', color: '#92a2b6', value: Math.max(0, remainder) }]
   }
   return <main>
-    <header><a className="brand" href="/">pierce<span> / explorer</span></a><a href="/">Cube workloads</a></header>
+    <header><a className="brand" href="/">pierce<span> / explorer</span></a><nav className="experiment-links" aria-label="Experiments"><a href="/">Cube workloads</a><a href="/experiments/memory">Memory experiment</a></nav></header>
     <section className="workload">
       <h1>Shared BVH experiment</h1>
       <p>Measure how trace time changes as B gets finer, then compare Pierce with R-tree filtering and per-object OptiX checks on tiled nuclei and vessels.</p>

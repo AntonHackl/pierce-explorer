@@ -1,0 +1,80 @@
+[
+  {
+    "key": "vessels",
+    "title": "Nuclei and vessels",
+    "pairs": 33,
+    "vertices": 56895,
+    "triangles": 91346,
+    "edges": 137019,
+    "pierce": {
+      "cpu_peak_mib": 302.375,
+      "gpu_sampled_peak_above_idle_mib": 157,
+      "idle_mib": 148
+    },
+    "tdbase": {
+      "cpu_peak_mib": 134.9375,
+      "gpu_sampled_peak_above_idle_mib": 4223,
+      "idle_mib": 148
+    },
+    "allocations": {
+      "positions": 682740,
+      "indices": 1096152,
+      "triangleIds": 365384,
+      "edgeEndpoints": 3288456,
+      "edgeIds": 548076,
+      "grid": 1176,
+      "hashTable": 8200,
+      "resultBuffer": 8200,
+      "hostResults": 264,
+      "workspace": 4294967296,
+      "bvhA": 3183744,
+      "bvhB": 1730432,
+      "buildScratchA": 497152,
+      "buildScratchB": 270720,
+      "launcherGpu": 264,
+      "contextGpuDelta": 18874368,
+      "launcherGpuDelta": 0,
+      "estimatorGpu": 576,
+      "estimatorHost": 512
+    }
+  },
+  {
+    "key": "cubes",
+    "title": "50k × 50k tiled cubes",
+    "pairs": 250000,
+    "vertices": 800000,
+    "triangles": 1200000,
+    "edges": 1800000,
+    "pierce": {
+      "cpu_peak_mib": 397.49609375,
+      "gpu_sampled_peak_above_idle_mib": 303,
+      "idle_mib": 148
+    },
+    "tdbase": {
+      "cpu_peak_mib": 982.91796875,
+      "gpu_sampled_peak_above_idle_mib": 4223,
+      "idle_mib": 148
+    },
+    "allocations": {
+      "positions": 9600000,
+      "indices": 14400000,
+      "triangleIds": 4800000,
+      "edgeEndpoints": 43200000,
+      "edgeIds": 7200000,
+      "grid": 4480000,
+      "hashTable": 4000008,
+      "resultBuffer": 4000008,
+      "hostResults": 2000000,
+      "workspace": 4294967296,
+      "bvhA": 32225536,
+      "bvhB": 32225536,
+      "buildScratchA": 5026304,
+      "buildScratchB": 5026304,
+      "launcherGpu": 264,
+      "contextGpuDelta": 18874368,
+      "launcherGpuDelta": 2097152,
+      "estimatorGpu": 2880000,
+      "estimatorHost": 4194304
+    }
+  }
+]

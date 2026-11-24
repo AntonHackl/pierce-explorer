@@ -1,7 +1,10 @@
-import { StrictMode, useEffect, useState } from 'react'
+import { lazy, StrictMode, Suspense, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './style.css'
 import { Experiments } from './Experiments'
+import { MemoryExperiment } from './MemoryExperiment'
+
+const IfcPilot = lazy(() => import('./IfcPilot').then(module => ({ default: module.IfcPilot })))
 
 type WorkloadId = 'small' | 'large'
 type Operation = 'load' | 'run' | 'unload'
@@ -97,7 +100,7 @@ function App() {
   const memory = health?.memory
   return (
     <main>
-      <header><a className="brand" href="/">pierce<span> / explorer</span></a><a href="/experiments/shared-bvh">Shared BVH experiment</a></header>
+      <header><a className="brand" href="/">pierce<span> / explorer</span></a><nav className="experiment-links" aria-label="Experiments"><a href="/experiments/shared-bvh">Shared BVH experiment</a><a href="/experiments/memory">Memory experiment</a><a href="/experiments/ifc">IFC pilot</a></nav></header>
       <nav className="workload-selector" aria-label="Cube workload">
         {(['small', 'large'] as WorkloadId[]).map(id => {
           const item = workloads.find(w => w.workloadId === id)
@@ -159,4 +162,4 @@ function App() {
   )
 }
 
-createRoot(document.getElementById('root')!).render(<StrictMode>{window.location.pathname === "/experiments/shared-bvh" ? <Experiments /> : <App />}</StrictMode>)
+createRoot(document.getElementById('root')!).render(<StrictMode>{window.location.pathname === "/experiments/shared-bvh" ? <Experiments /> : window.location.pathname === "/experiments/memory" ? <MemoryExperiment /> : window.location.pathname === "/experiments/ifc" ? <Suspense fallback={<p>Loading IFC pilot…</p>}><IfcPilot /></Suspense> : <App />}</StrictMode>)

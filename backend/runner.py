@@ -74,6 +74,7 @@ class PierceRunner:
         self.operation = None
         self.operation_workload = None
         self.resident = {}
+        self.ifc_counts = {}
         self.memory = None
         self.checkpoints = []
         self.workload_errors = {}
@@ -272,7 +273,7 @@ class PierceRunner:
             if not isinstance(pair, dict):
                 raise ValueError("Invalid pair status")
             key, handle = pair.get("key"), pair.get("pairHandle")
-            if key not in CATALOG or key in resident or not isinstance(handle, str) or not handle or handle in handles:
+            if (key not in CATALOG and key not in self.ifc_counts) or key in resident or not isinstance(handle, str) or not handle or handle in handles:
                 raise ValueError("Invalid workload key or pair handle")
             handles.add(handle)
             result = pair.get("lastResult")
@@ -286,11 +287,12 @@ class PierceRunner:
                     raise ValueError("Invalid query phase timings")
                 phase_timings = {name: self._number(phases, name, integer=True) / 1000
                                  for name in ("estimation", "trace", "compaction", "download")}
+                counts = self.ifc_counts[key] if key in self.ifc_counts else (CATALOG[key]["countA"], CATALOG[key]["countB"])
                 result = {"workloadId": key, "queryExecutionMs": self._number(result, "queryExecutionUs") / 1000,
                           "benchmarkPhaseSumMs": self._number(result, "benchmarkPhaseSumUs") / 1000,
                           "phaseTimingsMs": phase_timings,
                           "resultCount": result_count, "completedQueries": count,
-                          "actualSelectivity": result_count / (CATALOG[key]["countA"] * CATALOG[key]["countB"]),
+                          "actualSelectivity": result_count / (counts[0] * counts[1]),
                           "rawHitCount": self._number(result, "rawHitCount", integer=True),
                           "estimatedPairCount": self._number(result, "estimatedPairCount", integer=True),
                           "hashTableBytes": self._number(result, "hashTableBytes", integer=True),
@@ -302,6 +304,60 @@ class PierceRunner:
                              "completedQueries": count, "lastResult": result}
         self.resident, self.memory, self.checkpoints = resident, memory, checkpoints
         self.runtime_initialization_ms = initialization
+
+    def run_ifc(self, key, bundle_prefix, paths, counts):
+        if not self.lock.acquire(blocking=False):
+            raise DemoError("Pierce is busy. Wait for the current operation to finish.", 409)
+        start = time.perf_counter()
+        try:
+            self.health()
+            self._start()
+            prior = self._exchange("status")
+            self.ifc_counts[key] = counts
+            pair = self.resident.get(key)
+            structure_resident = any(resident.startswith(bundle_prefix) for resident in self.resident)
+            loaded = prior
+            if pair is None:
+                loaded = self._exchange("load", key=key, mesh1=str(paths[0]), mesh2=str(paths[1]))
+                pair = self.resident[key]
+            deltas = {field: loaded[field] - prior[field]
+                      for field in ("datasetReads", "datasetUploads", "indexBuilds")}
+            expected = 0 if loaded is prior else 1 if structure_resident else 2
+            if any(value != expected for value in deltas.values()):
+                raise DemoError("Native load counters did not confirm Sixty5 dataset reuse.")
+            query = self._exchange("query", pairHandle=pair["pairHandle"], includePairs=True)
+            result = self.resident[key]["lastResult"]
+            pairs = query.get("resultPairs")
+            if not isinstance(pairs, list) or len(pairs) != result["resultCount"] or any(
+                not isinstance(pair, list) or len(pair) != 2 or any(
+                    type(index) is not int or not 0 <= index < limit
+                    for index, limit in zip(pair, counts))
+                for pair in pairs
+            ):
+                raise DemoError("Worker returned invalid live pair IDs. Rebuild pierce_worker if needed.")
+            return {
+                **result, **deltas, "pairs": sorted(pairs),
+                "loadMs": pair["datasetLoadMs"] if loaded is not prior else 0,
+                "runtimeInitializationMs": (loaded["runtimeInitializationUs"] - prior["runtimeInitializationUs"]) / 1000,
+                "structureReused": structure_resident,
+                "inputReused": loaded is prior,
+                "addedGpuBytes": loaded["datasetGpuBytes"] - prior["datasetGpuBytes"],
+                "residentGpuBytes": loaded["datasetGpuBytes"],
+                "backendMs": (time.perf_counter() - start) * 1000,
+            }
+        finally:
+            self.lock.release()
+
+    def reset_ifc(self):
+        if not self.lock.acquire(blocking=False):
+            raise DemoError("Pierce is busy. Wait for the current operation to finish.", 409)
+        try:
+            self.health()
+            for key in set(self.resident).intersection(self.ifc_counts):
+                self._exchange("unload", pairHandle=self.resident[key]["pairHandle"])
+            self.ifc_counts.clear()
+        finally:
+            self.lock.release()
 
     def _operate(self, operation, workload_id):
         if workload_id not in CATALOG:
